@@ -22,65 +22,71 @@ const DEFAULT_FAMILY = {
 };
 
 async function seedDatabaseSQLite() {
-  try {
-    console.log('🌱 Starting SQLite database seeding...');
+  const dbPath = process.env.DB_PATH || path.join(__dirname, '../../database.sqlite');
+  console.log('🌱 Starting SQLite database seeding...');
+  console.log(`📁 SQLite Database: ${dbPath}`);
 
-    const dbPath = process.env.DB_PATH || path.join(__dirname, '../../database.sqlite');
-    console.log(`📁 SQLite Database: ${dbPath}`);
+  // الاتصال بقاعدة البيانات
+  await sequelize.authenticate();
+  console.log('✅ SQLite connection established');
 
-    // الاتصال بقاعدة البيانات
-    await sequelize.authenticate();
-    console.log('✅ SQLite connection established');
+  // مزامنة الجداول (تنشأ تلقائياً إذا لم تكن موجودة)
+  await sequelize.sync({ force: false });
+  console.log('✅ Database tables synchronized');
 
-    // مزامنة الجداول (تنشأ تلقائياً إذا لم تكن موجودة)
-    await sequelize.sync({ force: false });
-    console.log('✅ Database tables synchronized');
+  // التحقق إذا كان هناك مستخدمين
+  const userCount = await User.count();
 
-    // التحقق إذا كان هناك مستخدمين
-    const userCount = await User.count();
+  if (userCount > 0) {
+    console.log('ℹ️  Database already seeded. Skipping...');
 
-    if (userCount > 0) {
-      console.log('ℹ️  Database already seeded. Skipping...');
-
-      // عرض بيانات الدخول من .env
-      if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
-        console.log('\n📝 Login with:');
-        console.log(`   Username: ${process.env.ADMIN_USERNAME}`);
-        console.log(`   Password: ${process.env.ADMIN_PASSWORD}`);
-      }
-
-      process.exit(0);
+    // عرض بيانات الدخول من .env
+    if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+      console.log('\n📝 Login with:');
+      console.log(`   Username: ${process.env.ADMIN_USERNAME}`);
+      console.log(`   Password: ${process.env.ADMIN_PASSWORD}`);
     }
 
-    // إنشاء المستخدم الافتراضي
-    console.log('👤 Creating default admin user...');
-    const user = await User.create(DEFAULT_USER);
-    console.log('✅ Default user created:');
-    console.log(`   Username: ${DEFAULT_USER.username}`);
-    console.log(`   Email: ${DEFAULT_USER.email}`);
-    console.log(`   Password: ${DEFAULT_USER.password}`);
-
-    // إنشاء أسرة تجريبية
-    console.log('\n👨‍👩‍👧‍👦 Creating default family...');
-    const family = await Family.create({
-      ...DEFAULT_FAMILY,
-      userId: user.id
-    });
-    console.log('✅ Default family created');
-
-    console.log('\n🎉 SQLite database seeding completed successfully!');
-    console.log('\n📝 You can now login with:');
-    console.log(`   URL: http://localhost:3000/login`);
-    console.log(`   Username: ${DEFAULT_USER.username}`);
-    console.log(`   Password: ${DEFAULT_USER.password}`);
-    console.log(`\n📁 Database file: ${dbPath}`);
-
+    // Return instead of exit when called from API
+    if (require.main !== module) {
+      return { success: true, message: 'Database already initialized' };
+    }
     process.exit(0);
-  } catch (error) {
-    console.error('❌ Error seeding SQLite database:', error.message);
-    console.error('\n📚 للمساعدة: راجع INSTALLATION.md');
-    process.exit(1);
   }
+
+  // إنشاء المستخدم الافتراضي
+  console.log('👤 Creating default admin user...');
+  const user = await User.create(DEFAULT_USER);
+  console.log('✅ Default user created:');
+  console.log(`   Username: ${DEFAULT_USER.username}`);
+  console.log(`   Email: ${DEFAULT_USER.email}`);
+  console.log(`   Password: ${DEFAULT_USER.password}`);
+
+  // إنشاء أسرة تجريبية
+  console.log('\n👨‍👩‍👧‍👦 Creating default family...');
+  const family = await Family.create({
+    ...DEFAULT_FAMILY,
+    userId: user.id
+  });
+  console.log('✅ Default family created');
+
+  console.log('\n🎉 SQLite database seeding completed successfully!');
+  console.log('\n📝 You can now login with:');
+  console.log(`   URL: http://localhost:3000/login`);
+  console.log(`   Username: ${DEFAULT_USER.username}`);
+  console.log(`   Password: ${DEFAULT_USER.password}`);
+  console.log(`\n📁 Database file: ${dbPath}`);
+
+  // Return instead of exit when called from API
+  if (require.main !== module) {
+    return {
+      success: true,
+      message: 'Database initialized successfully',
+      username: DEFAULT_USER.username,
+      password: DEFAULT_USER.password
+    };
+  }
+  process.exit(0);
 }
 
 // تشغيل عند استدعاء الملف مباشرة

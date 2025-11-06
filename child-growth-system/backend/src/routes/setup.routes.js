@@ -126,11 +126,35 @@ SETUP_DATE=${new Date().toISOString()}
     const envPath = path.join(__dirname, '../../.env');
     fs.writeFileSync(envPath, envContent);
 
-    res.json({
-      success: true,
-      message: 'Configuration saved successfully',
-      nextStep: 'database-test'
-    });
+    // Reload environment variables
+    require('dotenv').config();
+
+    // Initialize database and create admin user
+    try {
+      const finalDbType = dbType || 'sqlite';
+
+      if (finalDbType === 'sqlite') {
+        const seedSQLite = require('../utils/seed.sqlite');
+        await seedSQLite();
+      } else if (finalDbType === 'mysql') {
+        const seedMySQL = require('../utils/seed.mysql');
+        await seedMySQL();
+      }
+
+      res.json({
+        success: true,
+        message: 'تم حفظ الإعدادات وإنشاء قاعدة البيانات بنجاح!',
+        dbType: finalDbType
+      });
+    } catch (dbError) {
+      console.error('Database initialization error:', dbError);
+      res.json({
+        success: true,
+        message: 'تم حفظ الإعدادات. يرجى إعادة تشغيل السيرفر.',
+        warning: 'Database will be initialized on next server start',
+        dbType: dbType || 'sqlite'
+      });
+    }
 
   } catch (error) {
     console.error('Setup error:', error);
