@@ -1,3 +1,6 @@
+// تحميل المتغيرات البيئية
+require('dotenv').config();
+
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Family = require('../models/Family');
@@ -23,6 +26,7 @@ const DEFAULT_FAMILY = {
 async function seedDatabase() {
   try {
     console.log('🌱 Starting database seeding...');
+    console.log(`📍 MongoDB URI: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/child-growth-system'}`);
 
     // الاتصال بقاعدة البيانات
     await connectDB();
@@ -59,7 +63,16 @@ async function seedDatabase() {
 
     process.exit(0);
   } catch (error) {
-    console.error('❌ Error seeding database:', error);
+    console.error('❌ Error seeding database:', error.message);
+
+    if (error.message.includes('connect')) {
+      console.error('\n💡 تأكد من تشغيل MongoDB:');
+      console.error('   - محلي: sudo systemctl start mongod');
+      console.error('   - Docker: docker run -d -p 27017:27017 --name mongodb mongo');
+      console.error('   - أو استخدم MongoDB Atlas (Cloud)');
+      console.error('\n📚 راجع دليل التثبيت: MONGODB-INSTALL.md');
+    }
+
     process.exit(1);
   }
 }
