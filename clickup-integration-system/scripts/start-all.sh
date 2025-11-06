@@ -15,6 +15,9 @@ NC='\033[0m' # No Color
 
 PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
+# Create logs directory if it doesn't exist
+mkdir -p "${PROJECT_DIR}/logs"
+
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  🚀 Starting ClickUp Integration System${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -36,11 +39,11 @@ fi
 source venv/bin/activate
 pip install -q -r requirements.txt
 
-nohup python3 clickup_webhook.py > ../logs/python-backend.log 2>&1 &
+nohup python3 clickup_webhook.py > "${PROJECT_DIR}/logs/python-backend.log" 2>&1 &
 PYTHON_PID=$!
 
 echo -e "${GREEN}✅ Python Backend started (PID: $PYTHON_PID, Port: 5005)${NC}"
-echo "$PYTHON_PID" > ../logs/python-backend.pid
+echo "$PYTHON_PID" > "${PROJECT_DIR}/logs/python-backend.pid"
 echo
 
 # ============================================================================
@@ -56,11 +59,11 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-nohup node index1.js > ../logs/nodejs-backend.log 2>&1 &
+nohup node index1.js > "${PROJECT_DIR}/logs/nodejs-backend.log" 2>&1 &
 NODEJS_PID=$!
 
 echo -e "${GREEN}✅ Node.js Backend started (PID: $NODEJS_PID, Port: 5014)${NC}"
-echo "$NODEJS_PID" > ../logs/nodejs-backend.pid
+echo "$NODEJS_PID" > "${PROJECT_DIR}/logs/nodejs-backend.pid"
 echo
 
 # ============================================================================
@@ -79,11 +82,11 @@ fi
 source venv/bin/activate
 pip install -q -r requirements.txt
 
-nohup python3 admin_server.py > ../logs/admin-api.log 2>&1 &
+nohup python3 admin_server.py > "${PROJECT_DIR}/logs/admin-api.log" 2>&1 &
 ADMIN_PID=$!
 
 echo -e "${GREEN}✅ Admin API started (PID: $ADMIN_PID, Port: 5010)${NC}"
-echo "$ADMIN_PID" > ../logs/admin-api.pid
+echo "$ADMIN_PID" > "${PROJECT_DIR}/logs/admin-api.pid"
 echo
 
 # ============================================================================
