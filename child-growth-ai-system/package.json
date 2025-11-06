@@ -1,0 +1,36 @@
+{
+  "name": "child-growth-ai-system",
+  "version": "1.0.0",
+  "description": "نظام متكامل لمتابعة نمو الطفل مع الذكاء الصناعي وإرسال رسائل واتساب",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "init-db": "node database/init-db.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "ai",
+    "child-growth",
+    "parenting",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "sqlite3": "^5.1.6",
+    "node-cron": "^3.0.3",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.43"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
