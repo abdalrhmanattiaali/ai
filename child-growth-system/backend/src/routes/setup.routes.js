@@ -141,6 +141,50 @@ SETUP_DATE=${new Date().toISOString()}
   }
 });
 
+// @desc    Create new database
+// @route   POST /api/setup/create-database
+router.post('/create-database', async (req, res) => {
+  try {
+    const { dbType, dbHost, dbPort, dbName, rootUser, rootPassword } = req.body;
+
+    if (dbType === 'mysql') {
+      const mysql = require('mysql2/promise');
+
+      // Connect as root (without database)
+      const connection = await mysql.createConnection({
+        host: dbHost,
+        port: dbPort || 3306,
+        user: rootUser,
+        password: rootPassword
+      });
+
+      // Create database
+      await connection.query(
+        `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+      );
+
+      await connection.end();
+
+      res.json({
+        success: true,
+        message: `تم إنشاء قاعدة البيانات "${dbName}" بنجاح ✅`
+      });
+    } else {
+      res.json({
+        success: true,
+        message: 'Database type not implemented yet'
+      });
+    }
+
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message,
+      message: 'فشل إنشاء قاعدة البيانات ❌'
+    });
+  }
+});
+
 // @desc    Test database connection
 // @route   POST /api/setup/test-database
 router.post('/test-database', async (req, res) => {

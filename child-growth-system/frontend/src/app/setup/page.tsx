@@ -10,6 +10,9 @@ interface SetupStep {
 }
 
 interface SetupData {
+  // Database Mode
+  dbMode: 'create' | 'connect'; // جديد: وضع قاعدة البيانات
+
   // Database
   dbType: string;
   dbHost: string;
@@ -17,6 +20,10 @@ interface SetupData {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+
+  // For creating new database
+  rootUser: string;
+  rootPassword: string;
 
   // API Keys
   openaiKey: string;
@@ -70,12 +77,15 @@ export default function SetupWizard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [setupData, setSetupData] = useState<SetupData>({
+    dbMode: 'connect',
     dbType: 'mysql',
     dbHost: '',
     dbPort: '3306',
     dbName: '',
     dbUser: '',
     dbPassword: '',
+    rootUser: 'root',
+    rootPassword: '',
     openaiKey: '',
     weatherKey: '',
     smtpHost: 'smtp.gmail.com',
@@ -109,6 +119,45 @@ export default function SetupWizard() {
   const updateData = (field: string, value: string) => {
     setSetupData(prev => ({ ...prev, [field]: value }));
     setError('');
+  };
+
+  const createDatabase = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch('http://localhost:5000/api/setup/create-database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dbType: setupData.dbType,
+          dbHost: setupData.dbHost,
+          dbPort: setupData.dbPort,
+          dbName: setupData.dbName,
+          rootUser: setupData.rootUser,
+          rootPassword: setupData.rootPassword
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccess(data.message);
+        // بعد إنشاء القاعدة، استخدم نفس المستخدم Root للاتصال
+        setSetupData(prev => ({
+          ...prev,
+          dbUser: setupData.rootUser,
+          dbPassword: setupData.rootPassword
+        }));
+      } else {
+        setError(data.message || data.error);
+      }
+    } catch (error: any) {
+      setError('فشل الاتصال بالخادم');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const testDatabaseConnection = async () => {
@@ -178,8 +227,12 @@ export default function SetupWizard() {
   const handleNext = () => {
     // Validation for each step
     if (currentStep === 1) {
-      if (!setupData.dbHost || !setupData.dbName || !setupData.dbUser) {
+      if (!setupData.dbHost || !setupData.dbName) {
         setError('يرجى ملء جميع حقول قاعدة البيانات المطلوبة');
+        return;
+      }
+      if (setupData.dbMode === 'connect' && (!setupData.dbUser || !setupData.dbPassword)) {
+        setError('يرجى إدخال اسم المستخدم وكلمة المرور');
         return;
       }
     } else if (currentStep === 4) {
@@ -244,9 +297,48 @@ export default function SetupWizard() {
               ⚙️ إعداد قاعدة البيانات MySQL
             </h2>
 
+            {/* خيار: إنشاء أو الاتصال */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                اختر طريقة الإعداد:
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => updateData('dbMode', 'create')}
+                  className={`p-4 border-2 rounded-lg text-center transition ${
+                    setupData.dbMode === 'create'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  <div className="text-3xl mb-2">🆕</div>
+                  <div className="font-bold">إنشاء قاعدة جديدة</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    سيتم إنشاؤها تلقائياً
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => updateData('dbMode', 'connect')}
+                  className={`p-4 border-2 rounded-lg text-center transition ${
+                    setupData.dbMode === 'connect'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  <div className="text-3xl mb-2">🔗</div>
+                  <div className="font-bold">الاتصال بقاعدة موجودة</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Remote SQL / Hosting
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* الحقول المشتركة */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                عنوان الخادم (Host)
+                عنوان الخادم (Host) *
               </label>
               <input
                 type="text"
@@ -273,7 +365,7 @@ export default function SetupWizard() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  اسم قاعدة البيانات
+                  اسم قاعدة البيانات *
                 </label>
                 <input
                   type="text"
@@ -285,39 +377,92 @@ export default function SetupWizard() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                اسم المستخدم (Username)
-              </label>
-              <input
-                type="text"
-                value={setupData.dbUser}
-                onChange={(e) => updateData('dbUser', e.target.value)}
-                placeholder="root"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {/* حقول مختلفة حسب الوضع */}
+            {setupData.dbMode === 'create' ? (
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 my-4">
+                  <p className="text-sm text-blue-800">
+                    💡 <strong>ملاحظة:</strong> أدخل بيانات مستخدم Root لإنشاء قاعدة البيانات تلقائياً
+                  </p>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                كلمة المرور (Password)
-              </label>
-              <input
-                type="password"
-                value={setupData.dbPassword}
-                onChange={(e) => updateData('dbPassword', e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    مستخدم Root *
+                  </label>
+                  <input
+                    type="text"
+                    value={setupData.rootUser}
+                    onChange={(e) => updateData('rootUser', e.target.value)}
+                    placeholder="root"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-            <button
-              onClick={testDatabaseConnection}
-              disabled={loading}
-              className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-            >
-              {loading ? '⏳ جاري الاختبار...' : '🔍 اختبار الاتصال'}
-            </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    كلمة مرور Root *
+                  </label>
+                  <input
+                    type="password"
+                    value={setupData.rootPassword}
+                    onChange={(e) => updateData('rootPassword', e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  onClick={createDatabase}
+                  disabled={loading || !setupData.dbHost || !setupData.dbName || !setupData.rootPassword}
+                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  {loading ? '⏳ جاري الإنشاء...' : '🆕 إنشاء قاعدة البيانات'}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 my-4">
+                  <p className="text-sm text-yellow-800">
+                    💡 <strong>ملاحظة:</strong> تأكد من أن قاعدة البيانات موجودة على الاستضافة
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    اسم المستخدم (Username) *
+                  </label>
+                  <input
+                    type="text"
+                    value={setupData.dbUser}
+                    onChange={(e) => updateData('dbUser', e.target.value)}
+                    placeholder="root"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    كلمة المرور (Password) *
+                  </label>
+                  <input
+                    type="password"
+                    value={setupData.dbPassword}
+                    onChange={(e) => updateData('dbPassword', e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  onClick={testDatabaseConnection}
+                  disabled={loading}
+                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  {loading ? '⏳ جاري الاختبار...' : '🔍 اختبار الاتصال'}
+                </button>
+              </>
+            )}
           </div>
         );
 
