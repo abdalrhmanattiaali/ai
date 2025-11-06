@@ -18,7 +18,19 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="flex gap-4 justify-center mt-12">
+        {/* بيانات الدخول التجريبية */}
+        <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 max-w-md mx-auto">
+          <div className="text-green-800">
+            <h3 className="text-xl font-bold mb-3">🚀 جاهز للاستخدام مباشرة!</h3>
+            <p className="mb-3">استخدم بيانات الدخول التجريبية:</p>
+            <div className="bg-white rounded-lg p-4 text-right font-mono text-sm">
+              <p className="mb-2"><span className="font-bold">اسم المستخدم:</span> admin</p>
+              <p><span className="font-bold">كلمة المرور:</span> 123456</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-4 justify-center mt-8">
           <Link
             href="/login"
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-colors"
