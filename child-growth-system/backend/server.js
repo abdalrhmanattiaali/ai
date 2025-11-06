@@ -2,13 +2,24 @@ require('dotenv').config();
 const http = require('http');
 const { Server } = require('socket.io');
 const app = require('./src/app');
-const connectDB = require('./src/config/database');
 const whatsappService = require('./src/services/whatsapp.service');
 const appConfig = require('./src/config/app.config');
 
 const PORT = appConfig.app.port;
 
-// Connect to database
+// Connect to database (supports both MySQL and MongoDB)
+const dbType = process.env.DB_TYPE || 'mongodb';
+let connectDB;
+
+if (dbType === 'mysql') {
+  const { connectSequelize } = require('./src/config/sequelize.config');
+  connectDB = connectSequelize;
+  console.log('📊 Using MySQL database');
+} else {
+  connectDB = require('./src/config/database');
+  console.log('📊 Using MongoDB database');
+}
+
 connectDB();
 
 // Create HTTP server

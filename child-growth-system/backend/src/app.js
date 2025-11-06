@@ -41,6 +41,9 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+// Setup wizard (no auth required)
+app.use('/api/setup', require('./routes/setup.routes'));
+
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/whatsapp', require('./routes/whatsapp.routes'));
 app.use('/api/families', require('./routes/family.routes'));
