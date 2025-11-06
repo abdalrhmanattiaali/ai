@@ -7,11 +7,19 @@ const appConfig = require('./config/app.config');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// Security middleware - Relaxed for development
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 
-// CORS
-app.use(cors(appConfig.cors));
+// CORS - Allow all origins in development
+app.use(cors({
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
@@ -22,9 +30,11 @@ if (appConfig.app.env === 'development') {
   app.use(morgan('dev'));
 }
 
-// Rate limiting
+// Rate limiting - Disabled for setup
 const limiter = rateLimit(appConfig.rateLimit);
-app.use('/api/', limiter);
+app.use('/api/auth', limiter);
+app.use('/api/whatsapp', limiter);
+// Don't rate limit setup routes
 
 // Static files
 app.use('/uploads', express.static('uploads'));

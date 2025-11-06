@@ -6,64 +6,64 @@ const path = require('path');
 // @desc    Check if system is already setup
 // @route   GET /api/setup/status
 router.get('/status', (req, res) => {
-  const envPath = path.join(__dirname, '../../.env');
-  const envExists = fs.existsSync(envPath);
+  try {
+    const envPath = path.join(__dirname, '../../.env');
+    const envExists = fs.existsSync(envPath);
 
-  if (!envExists) {
-    return res.json({
+    if (!envExists) {
+      return res.json({
+        isSetup: false,
+        message: 'System needs setup'
+      });
+    }
+
+    // Check if setup is complete
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const hasAdmin = envContent.includes('SETUP_COMPLETE=true');
+
+    res.json({
+      isSetup: hasAdmin,
+      message: hasAdmin ? 'System is ready' : 'Setup incomplete'
+    });
+  } catch (error) {
+    console.error('Status check error:', error);
+    res.json({
       isSetup: false,
       message: 'System needs setup'
     });
   }
-
-  // Check if setup is complete
-  const envContent = fs.readFileSync(envPath, 'utf8');
-  const hasDatabase = envContent.includes('DB_HOST') && envContent.includes('DB_NAME');
-  const hasAdmin = envContent.includes('SETUP_COMPLETE=true');
-
-  res.json({
-    isSetup: hasAdmin,
-    hasDatabase: hasDatabase,
-    message: hasAdmin ? 'System is ready' : 'Setup incomplete'
-  });
 });
 
 // @desc    Save setup configuration
 // @route   POST /api/setup/configure
 router.post('/configure', async (req, res) => {
   try {
+    console.log('📥 Received setup configuration');
+
     const {
-      // Database
       dbType,
       dbHost,
       dbPort,
       dbName,
       dbUser,
       dbPassword,
-
-      // APIs
       openaiKey,
       weatherKey,
-
-      // Email
       smtpHost,
       smtpPort,
       smtpUser,
       smtpPass,
-
-      // Admin User
       adminUsername,
       adminEmail,
       adminPassword
     } = req.body;
 
+    console.log('✅ Parsed request body');
+
     // Build .env content
-    const envContent = `# ========================================
-# 🌟 رفيق النمو - Auto-Generated Config
-# ========================================
-# تم إنشاء هذا الملف تلقائياً بواسطة Setup Wizard
-# تاريخ: ${new Date().toLocaleString('ar-EG')}
-# ========================================
+    const envContent = `# Auto-Generated Config
+# تم إنشاء هذا الملف تلقائياً
+# ${new Date().toLocaleString()}
 
 # Application
 NODE_ENV=development
@@ -71,34 +71,31 @@ PORT=5000
 APP_URL=http://localhost:5000
 FRONTEND_URL=http://localhost:3000
 
-# Database Configuration
+# Database
 DB_TYPE=${dbType || 'sqlite'}
-${dbType === 'sqlite' ? `DB_PATH=./database.sqlite` : `DB_HOST=${dbHost || 'localhost'}
+${dbType === 'sqlite' ? 'DB_PATH=./database.sqlite' : `DB_HOST=${dbHost || 'localhost'}
 DB_PORT=${dbPort || '3306'}
 DB_NAME=${dbName || 'child_growth_system'}
 DB_USER=${dbUser || 'root'}
 DB_PASSWORD=${dbPassword || ''}`}
 
-# Legacy MongoDB URI (للتوافق)
-MONGODB_URI=mongodb://localhost:27017/child-growth-system
-
 # JWT
 JWT_SECRET=${generateRandomString(32)}
 JWT_EXPIRE=30d
 
-# OpenAI API
+# OpenAI
 OPENAI_API_KEY=${openaiKey || ''}
 
-# Weather API
+# Weather
 OPENWEATHER_API_KEY=${weatherKey || ''}
 
-# Email Configuration
+# Email
 SMTP_HOST=${smtpHost || 'smtp.gmail.com'}
 SMTP_PORT=${smtpPort || '587'}
 SMTP_USER=${smtpUser || ''}
 SMTP_PASS=${smtpPass || ''}
 
-# Redis (Optional)
+# Redis
 REDIS_URL=redis://localhost:6379
 
 # File Upload
@@ -112,7 +109,7 @@ LOG_FILE=./logs/app.log
 # WhatsApp
 WHATSAPP_SESSION_PATH=./whatsapp-sessions
 
-# Admin User (from setup)
+# Admin User
 ADMIN_USERNAME=${adminUsername}
 ADMIN_EMAIL=${adminEmail}
 ADMIN_PASSWORD=${adminPassword}
@@ -125,42 +122,93 @@ SETUP_DATE=${new Date().toISOString()}
     // Save .env file
     const envPath = path.join(__dirname, '../../.env');
     fs.writeFileSync(envPath, envContent);
+    console.log('✅ .env file created');
 
     // Reload environment variables
-    require('dotenv').config();
+    require('dotenv').config({ path: envPath });
+    console.log('✅ Environment variables reloaded');
 
-    // Send initial success response
+    // Send success response immediately
     res.json({
       success: true,
-      message: 'تم حفظ الإعدادات بنجاح! جاري إنشاء قاعدة البيانات...',
+      message: 'تم حفظ الإعدادات بنجاح! ✅',
       dbType: dbType || 'sqlite'
     });
 
-    // Initialize database in background (don't block response)
+    console.log('✅ Response sent to client');
+
+    // Initialize database in background
     setTimeout(async () => {
       try {
+        console.log('🔄 Initializing database...');
         const finalDbType = dbType || 'sqlite';
 
         if (finalDbType === 'sqlite') {
           const seedSQLite = require('../utils/seed.sqlite');
           await seedSQLite();
-          console.log('✅ Database initialized successfully');
+          console.log('✅ SQLite database initialized');
         } else if (finalDbType === 'mysql') {
           const seedMySQL = require('../utils/seed.mysql');
           await seedMySQL();
-          console.log('✅ Database initialized successfully');
+          console.log('✅ MySQL database initialized');
         }
       } catch (dbError) {
         console.error('⚠️  Database initialization error:', dbError.message);
-        console.log('💡 Database will be initialized on next server restart');
+        console.log('💡 Please restart the server to complete setup');
       }
-    }, 100);
+    }, 500);
 
   } catch (error) {
-    console.error('Setup error:', error);
+    console.error('❌ Setup error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || 'فشل في حفظ الإعدادات'
+    });
+  }
+});
+
+// @desc    Test database connection
+// @route   POST /api/setup/test-database
+router.post('/test-database', async (req, res) => {
+  try {
+    const { dbType, dbHost, dbPort, dbName, dbUser, dbPassword } = req.body;
+
+    if (dbType === 'sqlite') {
+      return res.json({
+        success: true,
+        message: 'SQLite لا يحتاج اختبار - جاهز للاستخدام! ✅'
+      });
+    }
+
+    if (dbType === 'mysql') {
+      const mysql = require('mysql2/promise');
+      const connection = await mysql.createConnection({
+        host: dbHost,
+        port: dbPort || 3306,
+        user: dbUser,
+        password: dbPassword,
+        database: dbName
+      });
+
+      await connection.ping();
+      await connection.end();
+
+      return res.json({
+        success: true,
+        message: 'تم الاتصال بقاعدة البيانات بنجاح ✅'
+      });
+    }
+
+    res.json({
+      success: false,
+      message: 'نوع قاعدة البيانات غير مدعوم'
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message,
+      message: 'فشل الاتصال بقاعدة البيانات ❌'
     });
   }
 });
@@ -174,7 +222,6 @@ router.post('/create-database', async (req, res) => {
     if (dbType === 'mysql') {
       const mysql = require('mysql2/promise');
 
-      // Connect as root (without database)
       const connection = await mysql.createConnection({
         host: dbHost,
         port: dbPort || 3306,
@@ -182,69 +229,28 @@ router.post('/create-database', async (req, res) => {
         password: rootPassword
       });
 
-      // Create database
       await connection.query(
         `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
       );
 
       await connection.end();
 
-      res.json({
+      return res.json({
         success: true,
         message: `تم إنشاء قاعدة البيانات "${dbName}" بنجاح ✅`
       });
-    } else {
-      res.json({
-        success: true,
-        message: 'Database type not implemented yet'
-      });
     }
+
+    res.json({
+      success: false,
+      message: 'نوع قاعدة البيانات غير مدعوم'
+    });
 
   } catch (error) {
     res.status(400).json({
       success: false,
       error: error.message,
       message: 'فشل إنشاء قاعدة البيانات ❌'
-    });
-  }
-});
-
-// @desc    Test database connection
-// @route   POST /api/setup/test-database
-router.post('/test-database', async (req, res) => {
-  try {
-    const { dbType, dbHost, dbPort, dbName, dbUser, dbPassword } = req.body;
-
-    if (dbType === 'mysql') {
-      const mysql = require('mysql2/promise');
-
-      const connection = await mysql.createConnection({
-        host: dbHost,
-        port: dbPort || 3306,
-        user: dbUser,
-        password: dbPassword,
-        database: dbName
-      });
-
-      await connection.ping();
-      await connection.end();
-
-      res.json({
-        success: true,
-        message: 'تم الاتصال بقاعدة البيانات بنجاح ✅'
-      });
-    } else {
-      res.json({
-        success: true,
-        message: 'Database type not implemented yet'
-      });
-    }
-
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-      message: 'فشل الاتصال بقاعدة البيانات ❌'
     });
   }
 });
@@ -265,7 +271,6 @@ router.post('/test-openai', async (req, res) => {
     const OpenAI = require('openai');
     const openai = new OpenAI({ apiKey });
 
-    // Test with a simple request
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: 'Hello' }],
@@ -282,23 +287,6 @@ router.post('/test-openai', async (req, res) => {
       success: false,
       error: error.message,
       message: 'فشل الاتصال بـ OpenAI ❌'
-    });
-  }
-});
-
-// @desc    Create admin user
-// @route   POST /api/setup/create-admin
-router.post('/create-admin', async (req, res) => {
-  try {
-    // This will be implemented after database setup
-    res.json({
-      success: true,
-      message: 'Admin user will be created on first run'
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
     });
   }
 });
