@@ -1,5 +1,6 @@
-// تحميل المتغيرات البيئية
-require('dotenv').config();
+// تحميل المتغيرات البيئية من مجلد backend
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const mongoose = require('mongoose');
 const User = require('../models/User');
@@ -26,7 +27,14 @@ const DEFAULT_FAMILY = {
 async function seedDatabase() {
   try {
     console.log('🌱 Starting database seeding...');
-    console.log(`📍 MongoDB URI: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/child-growth-system'}`);
+
+    // التأكد من وجود MONGODB_URI
+    if (!process.env.MONGODB_URI) {
+      console.log('⚠️  MONGODB_URI not found in .env, using default...');
+      process.env.MONGODB_URI = 'mongodb://localhost:27017/child-growth-system';
+    }
+
+    console.log(`📍 MongoDB URI: ${process.env.MONGODB_URI}`);
 
     // الاتصال بقاعدة البيانات
     await connectDB();
