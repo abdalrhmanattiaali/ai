@@ -1,0 +1,42 @@
+[Unit]
+Description=ClickUp Python Webhook Server (Flask)
+Documentation=https://github.com/your-org/clickup-integration
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=your_user
+Group=your_group
+WorkingDirectory=/path/to/clickup-integration-system/python-backend
+
+# Environment variables
+Environment="PATH=/usr/bin:/usr/local/bin"
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/path/to/clickup-integration-system/config/.env.python
+
+# Start command
+ExecStart=/usr/bin/python3 clickup_webhook.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65536
+MemoryLimit=512M
+CPUQuota=50%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=clickup-python
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

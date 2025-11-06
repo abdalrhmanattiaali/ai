@@ -1,0 +1,40 @@
+# Flask Web Framework
+Flask==2.3.3
+Werkzeug==2.3.7
+
+# HTTP Requests
+requests==2.31.0
+
+# Background Scheduler
+APScheduler==3.10.4
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Cryptography
+cryptography==41.0.4
+
+# Data Analysis (for reports)
+pandas==2.1.1
+openpyxl==3.1.2
+matplotlib==3.8.0
+
+# System Monitoring
+psutil==5.9.5
+
+# Retry Logic
+tenacity==8.2.3
+
+# Database
+# SQLite is included in Python standard library
+
+# Testing (optional)
+pytest==7.4.2
+pytest-flask==1.2.0
+
+# Linting (optional)
+flake8==6.1.0
+black==23.9.1
+
+# WSGI Server for production
+gunicorn==21.2.0

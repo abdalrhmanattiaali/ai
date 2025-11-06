@@ -1,0 +1,42 @@
+[Unit]
+Description=ClickUp Node.js Webhook Server with WhatsApp Bot
+Documentation=https://github.com/your-org/clickup-integration
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=your_user
+Group=your_group
+WorkingDirectory=/path/to/clickup-integration-system/nodejs-backend
+
+# Environment variables
+Environment="PATH=/usr/bin:/usr/local/bin:/usr/local/bin/node"
+Environment="NODE_ENV=production"
+EnvironmentFile=/path/to/clickup-integration-system/config/.env.nodejs
+
+# Start command
+ExecStart=/usr/bin/node index1.js
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65536
+MemoryLimit=1G
+CPUQuota=75%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=clickup-nodejs
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
