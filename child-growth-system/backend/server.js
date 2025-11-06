@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const { Server } = require('socket.io');
 const app = require('./src/app');
-const whatsappService = require('./src/services/whatsapp.service');
 const appConfig = require('./src/config/app.config');
 
 const PORT = appConfig.app.port;
@@ -62,8 +61,16 @@ io.on('connection', (socket) => {
   });
 });
 
-// ربط Socket.IO مع WhatsApp Service
-whatsappService.setEventEmitter(io);
+// Initialize WhatsApp Service only after setup
+if (isSetup) {
+  try {
+    const whatsappService = require('./src/services/whatsapp.service');
+    whatsappService.setEventEmitter(io);
+    console.log('💬 WhatsApp service loaded');
+  } catch (err) {
+    console.warn('⚠️  WhatsApp service not available:', err.message);
+  }
+}
 
 // Make io accessible to routes
 app.set('io', io);
@@ -103,7 +110,17 @@ process.on('unhandledRejection', (err) => {
 // Handle SIGTERM
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received, shutting down gracefully');
-  await whatsappService.disconnect();
+
+  // Disconnect WhatsApp only if it was loaded
+  if (isSetup) {
+    try {
+      const whatsappService = require('./src/services/whatsapp.service');
+      await whatsappService.disconnect();
+    } catch (err) {
+      console.warn('Could not disconnect WhatsApp:', err.message);
+    }
+  }
+
   server.close(() => {
     console.log('✅ Server closed');
     process.exit(0);

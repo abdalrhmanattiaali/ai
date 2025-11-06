@@ -89,9 +89,25 @@ async function seedDatabaseSQLite() {
   process.exit(0);
 }
 
-// تشغيل عند استدعاء الملف مباشرة
-if (require.main === module) {
-  seedDatabaseSQLite();
+// Wrapper with error handling
+async function seedDatabaseSQLiteWrapper() {
+  try {
+    return await seedDatabaseSQLite();
+  } catch (error) {
+    console.error('❌ Error seeding SQLite database:', error.message);
+
+    if (require.main === module) {
+      console.error('\n📚 للمساعدة: راجع INSTALLATION.md');
+      process.exit(1);
+    } else {
+      throw error;
+    }
+  }
 }
 
-module.exports = seedDatabaseSQLite;
+// تشغيل عند استدعاء الملف مباشرة
+if (require.main === module) {
+  seedDatabaseSQLiteWrapper();
+}
+
+module.exports = seedDatabaseSQLiteWrapper;

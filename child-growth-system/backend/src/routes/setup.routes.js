@@ -129,32 +129,32 @@ SETUP_DATE=${new Date().toISOString()}
     // Reload environment variables
     require('dotenv').config();
 
-    // Initialize database and create admin user
-    try {
-      const finalDbType = dbType || 'sqlite';
+    // Send initial success response
+    res.json({
+      success: true,
+      message: 'تم حفظ الإعدادات بنجاح! جاري إنشاء قاعدة البيانات...',
+      dbType: dbType || 'sqlite'
+    });
 
-      if (finalDbType === 'sqlite') {
-        const seedSQLite = require('../utils/seed.sqlite');
-        await seedSQLite();
-      } else if (finalDbType === 'mysql') {
-        const seedMySQL = require('../utils/seed.mysql');
-        await seedMySQL();
+    // Initialize database in background (don't block response)
+    setTimeout(async () => {
+      try {
+        const finalDbType = dbType || 'sqlite';
+
+        if (finalDbType === 'sqlite') {
+          const seedSQLite = require('../utils/seed.sqlite');
+          await seedSQLite();
+          console.log('✅ Database initialized successfully');
+        } else if (finalDbType === 'mysql') {
+          const seedMySQL = require('../utils/seed.mysql');
+          await seedMySQL();
+          console.log('✅ Database initialized successfully');
+        }
+      } catch (dbError) {
+        console.error('⚠️  Database initialization error:', dbError.message);
+        console.log('💡 Database will be initialized on next server restart');
       }
-
-      res.json({
-        success: true,
-        message: 'تم حفظ الإعدادات وإنشاء قاعدة البيانات بنجاح!',
-        dbType: finalDbType
-      });
-    } catch (dbError) {
-      console.error('Database initialization error:', dbError);
-      res.json({
-        success: true,
-        message: 'تم حفظ الإعدادات. يرجى إعادة تشغيل السيرفر.',
-        warning: 'Database will be initialized on next server start',
-        dbType: dbType || 'sqlite'
-      });
-    }
+    }, 100);
 
   } catch (error) {
     console.error('Setup error:', error);
