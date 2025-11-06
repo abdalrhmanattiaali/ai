@@ -10,18 +10,20 @@ interface SetupStep {
 }
 
 interface SetupData {
-  // Database Mode
-  dbMode: 'create' | 'connect'; // جديد: وضع قاعدة البيانات
+  // Database Type
+  dbType: 'sqlite' | 'mysql' | 'mongodb';
 
-  // Database
-  dbType: string;
+  // Database Mode (for MySQL)
+  dbMode: 'create' | 'connect';
+
+  // MySQL/MongoDB fields
   dbHost: string;
   dbPort: string;
   dbName: string;
   dbUser: string;
   dbPassword: string;
 
-  // For creating new database
+  // For creating new MySQL database
   rootUser: string;
   rootPassword: string;
 
@@ -46,7 +48,7 @@ const STEPS: SetupStep[] = [
   {
     id: 1,
     title: 'قاعدة البيانات',
-    description: 'إعداد اتصال قاعدة بيانات MySQL'
+    description: 'اختر نوع قاعدة البيانات'
   },
   {
     id: 2,
@@ -77,8 +79,8 @@ export default function SetupWizard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [setupData, setSetupData] = useState<SetupData>({
+    dbType: 'sqlite', // SQLite كخيار افتراضي
     dbMode: 'connect',
-    dbType: 'mysql',
     dbHost: '',
     dbPort: '3306',
     dbName: '',
@@ -98,7 +100,6 @@ export default function SetupWizard() {
     adminPasswordConfirm: ''
   });
 
-  // Check if already setup
   useEffect(() => {
     checkSetupStatus();
   }, []);
@@ -107,7 +108,6 @@ export default function SetupWizard() {
     try {
       const res = await fetch('http://localhost:5000/api/setup/status');
       const data = await res.json();
-
       if (data.isSetup) {
         router.push('/login');
       }
@@ -144,7 +144,6 @@ export default function SetupWizard() {
 
       if (data.success) {
         setSuccess(data.message);
-        // بعد إنشاء القاعدة، استخدم نفس المستخدم Root للاتصال
         setSetupData(prev => ({
           ...prev,
           dbUser: setupData.rootUser,
@@ -225,15 +224,17 @@ export default function SetupWizard() {
   };
 
   const handleNext = () => {
-    // Validation for each step
     if (currentStep === 1) {
-      if (!setupData.dbHost || !setupData.dbName) {
-        setError('يرجى ملء جميع حقول قاعدة البيانات المطلوبة');
-        return;
-      }
-      if (setupData.dbMode === 'connect' && (!setupData.dbUser || !setupData.dbPassword)) {
-        setError('يرجى إدخال اسم المستخدم وكلمة المرور');
-        return;
+      // SQLite لا يحتاج validation
+      if (setupData.dbType === 'mysql' || setupData.dbType === 'mongodb') {
+        if (!setupData.dbHost || !setupData.dbName) {
+          setError('يرجى ملء جميع حقول قاعدة البيانات المطلوبة');
+          return;
+        }
+        if (setupData.dbMode === 'connect' && (!setupData.dbUser || !setupData.dbPassword)) {
+          setError('يرجى إدخال اسم المستخدم وكلمة المرور');
+          return;
+        }
       }
     } else if (currentStep === 4) {
       if (!setupData.adminUsername || !setupData.adminEmail || !setupData.adminPassword) {
@@ -294,174 +295,246 @@ export default function SetupWizard() {
         return (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              ⚙️ إعداد قاعدة البيانات MySQL
+              🗄️ اختر نوع قاعدة البيانات
             </h2>
 
-            {/* خيار: إنشاء أو الاتصال */}
+            {/* اختيار نوع قاعدة البيانات */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                اختر طريقة الإعداد:
+                اختر نوع قاعدة البيانات:
               </label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
+                {/* SQLite */}
                 <button
-                  onClick={() => updateData('dbMode', 'create')}
+                  onClick={() => updateData('dbType', 'sqlite')}
                   className={`p-4 border-2 rounded-lg text-center transition ${
-                    setupData.dbMode === 'create'
+                    setupData.dbType === 'sqlite'
+                      ? 'border-green-600 bg-green-50'
+                      : 'border-gray-300 hover:border-green-400'
+                  }`}
+                >
+                  <div className="text-3xl mb-2">📁</div>
+                  <div className="font-bold">SQLite</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    مجرد ملف محلي
+                  </div>
+                  <div className="text-xs text-green-600 mt-1 font-bold">
+                    ⚡ الأسهل!
+                  </div>
+                </button>
+
+                {/* MySQL */}
+                <button
+                  onClick={() => updateData('dbType', 'mysql')}
+                  className={`p-4 border-2 rounded-lg text-center transition ${
+                    setupData.dbType === 'mysql'
                       ? 'border-blue-600 bg-blue-50'
                       : 'border-gray-300 hover:border-blue-400'
                   }`}
                 >
-                  <div className="text-3xl mb-2">🆕</div>
-                  <div className="font-bold">إنشاء قاعدة جديدة</div>
+                  <div className="text-3xl mb-2">🗄️</div>
+                  <div className="font-bold">MySQL</div>
                   <div className="text-xs text-gray-600 mt-1">
-                    سيتم إنشاؤها تلقائياً
+                    قاعدة تقليدية
                   </div>
                 </button>
 
+                {/* MongoDB */}
                 <button
-                  onClick={() => updateData('dbMode', 'connect')}
+                  onClick={() => updateData('dbType', 'mongodb')}
                   className={`p-4 border-2 rounded-lg text-center transition ${
-                    setupData.dbMode === 'connect'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-300 hover:border-blue-400'
+                    setupData.dbType === 'mongodb'
+                      ? 'border-purple-600 bg-purple-50'
+                      : 'border-gray-300 hover:border-purple-400'
                   }`}
                 >
-                  <div className="text-3xl mb-2">🔗</div>
-                  <div className="font-bold">الاتصال بقاعدة موجودة</div>
+                  <div className="text-3xl mb-2">🍃</div>
+                  <div className="font-bold">MongoDB</div>
                   <div className="text-xs text-gray-600 mt-1">
-                    Remote SQL / Hosting
+                    NoSQL
                   </div>
                 </button>
               </div>
             </div>
 
-            {/* الحقول المشتركة */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                عنوان الخادم (Host) *
-              </label>
-              <input
-                type="text"
-                value={setupData.dbHost}
-                onChange={(e) => updateData('dbHost', e.target.value)}
-                placeholder="localhost أو IP الاستضافة"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  المنفذ (Port)
-                </label>
-                <input
-                  type="text"
-                  value={setupData.dbPort}
-                  onChange={(e) => updateData('dbPort', e.target.value)}
-                  placeholder="3306"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  اسم قاعدة البيانات *
-                </label>
-                <input
-                  type="text"
-                  value={setupData.dbName}
-                  onChange={(e) => updateData('dbName', e.target.value)}
-                  placeholder="child_growth_system"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* حقول مختلفة حسب الوضع */}
-            {setupData.dbMode === 'create' ? (
-              <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 my-4">
-                  <p className="text-sm text-blue-800">
-                    💡 <strong>ملاحظة:</strong> أدخل بيانات مستخدم Root لإنشاء قاعدة البيانات تلقائياً
+            {/* SQLite - لا يحتاج إعدادات! */}
+            {setupData.dbType === 'sqlite' && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                <div className="text-center">
+                  <div className="text-5xl mb-4">✅</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    جاهز للاستخدام!
+                  </h3>
+                  <p className="text-gray-700 mb-4">
+                    SQLite لا يحتاج أي إعدادات - مجرد ملف محلي بسيط
                   </p>
+                  <div className="bg-white rounded p-3 text-sm text-gray-600">
+                    <div className="font-bold mb-1">📁 سيتم إنشاء الملف:</div>
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      backend/database.sqlite
+                    </code>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MySQL - يحتاج إعدادات */}
+            {setupData.dbType === 'mysql' && (
+              <>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    طريقة الإعداد:
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => updateData('dbMode', 'create')}
+                      className={`p-4 border-2 rounded-lg text-center transition ${
+                        setupData.dbMode === 'create'
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-gray-300 hover:border-blue-400'
+                      }`}
+                    >
+                      <div className="text-3xl mb-2">🆕</div>
+                      <div className="font-bold">إنشاء قاعدة جديدة</div>
+                    </button>
+
+                    <button
+                      onClick={() => updateData('dbMode', 'connect')}
+                      className={`p-4 border-2 rounded-lg text-center transition ${
+                        setupData.dbMode === 'connect'
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-gray-300 hover:border-blue-400'
+                      }`}
+                    >
+                      <div className="text-3xl mb-2">🔗</div>
+                      <div className="font-bold">الاتصال بقاعدة موجودة</div>
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    مستخدم Root *
+                    عنوان الخادم (Host) *
                   </label>
                   <input
                     type="text"
-                    value={setupData.rootUser}
-                    onChange={(e) => updateData('rootUser', e.target.value)}
-                    placeholder="root"
+                    value={setupData.dbHost}
+                    onChange={(e) => updateData('dbHost', e.target.value)}
+                    placeholder="localhost"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    كلمة مرور Root *
-                  </label>
-                  <input
-                    type="password"
-                    value={setupData.rootPassword}
-                    onChange={(e) => updateData('rootPassword', e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      المنفذ (Port)
+                    </label>
+                    <input
+                      type="text"
+                      value={setupData.dbPort}
+                      onChange={(e) => updateData('dbPort', e.target.value)}
+                      placeholder="3306"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      اسم قاعدة البيانات *
+                    </label>
+                    <input
+                      type="text"
+                      value={setupData.dbName}
+                      onChange={(e) => updateData('dbName', e.target.value)}
+                      placeholder="child_growth_system"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
-                <button
-                  onClick={createDatabase}
-                  disabled={loading || !setupData.dbHost || !setupData.dbName || !setupData.rootPassword}
-                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-                >
-                  {loading ? '⏳ جاري الإنشاء...' : '🆕 إنشاء قاعدة البيانات'}
-                </button>
+                {setupData.dbMode === 'create' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        مستخدم Root *
+                      </label>
+                      <input
+                        type="text"
+                        value={setupData.rootUser}
+                        onChange={(e) => updateData('rootUser', e.target.value)}
+                        placeholder="root"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        كلمة مرور Root *
+                      </label>
+                      <input
+                        type="password"
+                        value={setupData.rootPassword}
+                        onChange={(e) => updateData('rootPassword', e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button
+                      onClick={createDatabase}
+                      disabled={loading}
+                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                    >
+                      {loading ? '⏳ جاري الإنشاء...' : '🆕 إنشاء قاعدة البيانات'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        اسم المستخدم *
+                      </label>
+                      <input
+                        type="text"
+                        value={setupData.dbUser}
+                        onChange={(e) => updateData('dbUser', e.target.value)}
+                        placeholder="root"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        كلمة المرور *
+                      </label>
+                      <input
+                        type="password"
+                        value={setupData.dbPassword}
+                        onChange={(e) => updateData('dbPassword', e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button
+                      onClick={testDatabaseConnection}
+                      disabled={loading}
+                      className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                    >
+                      {loading ? '⏳ جاري الاختبار...' : '🔍 اختبار الاتصال'}
+                    </button>
+                  </>
+                )}
               </>
-            ) : (
-              <>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 my-4">
-                  <p className="text-sm text-yellow-800">
-                    💡 <strong>ملاحظة:</strong> تأكد من أن قاعدة البيانات موجودة على الاستضافة
-                  </p>
-                </div>
+            )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    اسم المستخدم (Username) *
-                  </label>
-                  <input
-                    type="text"
-                    value={setupData.dbUser}
-                    onChange={(e) => updateData('dbUser', e.target.value)}
-                    placeholder="root"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    كلمة المرور (Password) *
-                  </label>
-                  <input
-                    type="password"
-                    value={setupData.dbPassword}
-                    onChange={(e) => updateData('dbPassword', e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <button
-                  onClick={testDatabaseConnection}
-                  disabled={loading}
-                  className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
-                >
-                  {loading ? '⏳ جاري الاختبار...' : '🔍 اختبار الاتصال'}
-                </button>
-              </>
+            {/* MongoDB */}
+            {setupData.dbType === 'mongodb' && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 text-center">
+                <div className="text-5xl mb-4">🍃</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  MongoDB
+                </h3>
+                <p className="text-gray-700">
+                  الدعم قريباً... استخدم SQLite أو MySQL حالياً
+                </p>
+              </div>
             )}
           </div>
         );
@@ -484,9 +557,6 @@ export default function SetupWizard() {
                 placeholder="sk-..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
-              <p className="mt-1 text-xs text-gray-500">
-                للحصول على مفتاح: <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-600 underline">platform.openai.com</a>
-              </p>
             </div>
 
             {setupData.openaiKey && (
@@ -510,14 +580,11 @@ export default function SetupWizard() {
                 placeholder="..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
-              <p className="mt-1 text-xs text-gray-500">
-                للحصول على مفتاح: <a href="https://openweathermap.org/api" target="_blank" className="text-blue-600 underline">openweathermap.org</a>
-              </p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                💡 <strong>ملاحظة:</strong> مفاتيح API اختيارية. يمكنك إضافتها لاحقاً من لوحة التحكم.
+                💡 <strong>ملاحظة:</strong> مفاتيح API اختيارية. يمكنك إضافتها لاحقاً.
               </p>
             </div>
           </div>
@@ -543,7 +610,6 @@ export default function SetupWizard() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   SMTP Port
@@ -586,7 +652,7 @@ export default function SetupWizard() {
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                💡 <strong>ملاحظة:</strong> إعدادات البريد اختيارية. يمكنك إضافتها لاحقاً.
+                💡 <strong>ملاحظة:</strong> إعدادات البريد اختيارية.
               </p>
             </div>
           </div>
@@ -627,7 +693,7 @@ export default function SetupWizard() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                كلمة المرور * <span className="text-gray-500">(6 أحرف على الأقل)</span>
+                كلمة المرور *
               </label>
               <input
                 type="password"
@@ -676,7 +742,7 @@ export default function SetupWizard() {
                 تم الإعداد بنجاح!
               </h3>
               <p className="text-gray-600 mb-4">
-                يمكنك الآن ربط حساب WhatsApp من لوحة التحكم بعد تسجيل الدخول
+                يمكنك الآن ربط حساب WhatsApp من لوحة التحكم
               </p>
             </div>
 
@@ -684,8 +750,8 @@ export default function SetupWizard() {
               <p className="text-sm text-blue-800">
                 💡 <strong>الخطوة التالية:</strong><br />
                 1. انقر على "إنهاء الإعداد"<br />
-                2. سجل الدخول باستخدام بيانات المدير<br />
-                3. اذهب إلى "إعدادات WhatsApp" لربط حسابك
+                2. سجل الدخول<br />
+                3. اذهب إلى "إعدادات WhatsApp"
               </p>
             </div>
           </div>
@@ -699,7 +765,6 @@ export default function SetupWizard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             🌟 مرحباً في رفيق النمو
@@ -709,7 +774,6 @@ export default function SetupWizard() {
           </p>
         </div>
 
-        {/* Progress Steps */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-8">
             {STEPS.map((step, index) => (
@@ -742,7 +806,6 @@ export default function SetupWizard() {
             ))}
           </div>
 
-          {/* Error/Success Messages */}
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
               ❌ {error}
@@ -755,12 +818,10 @@ export default function SetupWizard() {
             </div>
           )}
 
-          {/* Step Content */}
           <div className="mb-6">
             {renderStep()}
           </div>
 
-          {/* Navigation Buttons */}
           <div className="flex justify-between">
             <button
               onClick={handlePrevious}
@@ -790,7 +851,6 @@ export default function SetupWizard() {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="text-center text-gray-600 text-sm">
           <p>هل تحتاج مساعدة؟ تواصل معنا على support@rafeeq.app</p>
         </div>

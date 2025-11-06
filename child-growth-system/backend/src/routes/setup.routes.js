@@ -72,12 +72,12 @@ APP_URL=http://localhost:5000
 FRONTEND_URL=http://localhost:3000
 
 # Database Configuration
-DB_TYPE=${dbType || 'mysql'}
-DB_HOST=${dbHost || 'localhost'}
+DB_TYPE=${dbType || 'sqlite'}
+${dbType === 'sqlite' ? `DB_PATH=./database.sqlite` : `DB_HOST=${dbHost || 'localhost'}
 DB_PORT=${dbPort || '3306'}
 DB_NAME=${dbName || 'child_growth_system'}
 DB_USER=${dbUser || 'root'}
-DB_PASSWORD=${dbPassword || ''}
+DB_PASSWORD=${dbPassword || ''}`}
 
 # Legacy MongoDB URI (للتوافق)
 MONGODB_URI=mongodb://localhost:27017/child-growth-system
