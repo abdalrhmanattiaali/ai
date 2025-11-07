@@ -216,6 +216,23 @@ class Quran {
 
     return result.count;
   }
+
+  /**
+   * البحث عن قراءات المستخدم الأخيرة
+   */
+  static findRecent(userId, limit = 20) {
+    const database = db.getDB();
+
+    const stmt = database.prepare(`
+      SELECT * FROM quran_readings
+      WHERE user_id = ?
+      ORDER BY date DESC
+      LIMIT ?
+    `);
+
+    const rows = stmt.all(userId, limit);
+    return rows.map(row => this._formatQuran(row));
+  }
 }
 
 module.exports = Quran;

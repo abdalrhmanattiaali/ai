@@ -4,7 +4,7 @@
  */
 
 require('dotenv').config();
-const mongoose = require('mongoose');
+const db = require('../src/config/database');
 const User = require('../src/models/User');
 const readline = require('readline');
 
@@ -23,7 +23,7 @@ async function createUser() {
     console.log('📝 إنشاء مستخدم جديد\n');
 
     // الاتصال بقاعدة البيانات
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/nibras_coach');
+    db.connect();
     console.log('✅ متصل بقاعدة البيانات\n');
 
     // جمع البيانات
@@ -56,7 +56,7 @@ async function createUser() {
     // إنشاء المستخدم
     console.log('\n💾 جاري الحفظ...');
 
-    const user = new User({
+    const user = User.create({
       name,
       phone,
       status: 'active',
@@ -85,8 +85,6 @@ async function createUser() {
       }
     });
 
-    await user.save();
-
     console.log('\n✅ تم إنشاء المستخدم بنجاح!\n');
 
     console.log('📋 معلومات المستخدم:');
@@ -96,7 +94,7 @@ async function createUser() {
     console.log(`المستوى: ${user.profile.level}`);
     console.log(`المدينة: ${user.location.city}, ${user.location.country}`);
     console.log(`الأهداف: ${user.profile.goals.join(', ')}`);
-    console.log(`المعرف: ${user._id}`);
+    console.log(`المعرف: ${user.id}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     console.log('💡 ملاحظة: تأكد من تشغيل بوت الواتساب لاستقبال الرسائل\n');

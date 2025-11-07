@@ -4,7 +4,7 @@
  */
 
 require('dotenv').config();
-const mongoose = require('mongoose');
+const db = require('../src/config/database');
 const Content = require('../src/models/Content');
 
 const islamicContent = [
@@ -180,32 +180,36 @@ async function seedContent() {
     console.log('🌱 بدء ملء قاعدة البيانات بالمحتوى الإسلامي...\n');
 
     // الاتصال بقاعدة البيانات
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/nibras_coach');
+    db.connect();
     console.log('✅ متصل بقاعدة البيانات\n');
 
     // حذف المحتوى القديم (اختياري)
-    const deleteCount = await Content.deleteMany({});
-    console.log(`🗑️  تم حذف ${deleteCount.deletedCount} محتوى قديم\n`);
+    const database = db.getDB();
+    const deleteStmt = database.prepare('DELETE FROM content');
+    const deleteResult = deleteStmt.run();
+    console.log(`🗑️  تم حذف ${deleteResult.changes} محتوى قديم\n`);
 
     // إضافة المحتوى الجديد
     console.log('📝 إضافة المحتوى الجديد...\n');
 
     for (let item of islamicContent) {
-      const content = new Content(item);
-      await content.save();
+      Content.create(item);
       console.log(`✅ تم إضافة: ${item.title} (${item.type})`);
     }
 
     console.log(`\n✨ تم إضافة ${islamicContent.length} محتوى بنجاح!\n`);
 
     // عرض إحصائيات
-    const stats = await Content.aggregate([
-      { $group: { _id: '$type', count: { $sum: 1 } } }
-    ]);
+    const statsStmt = database.prepare(`
+      SELECT type, COUNT(*) as count
+      FROM content
+      GROUP BY type
+    `);
+    const stats = statsStmt.all();
 
     console.log('📊 الإحصائيات:');
     stats.forEach(stat => {
-      console.log(`   ${stat._id}: ${stat.count}`);
+      console.log(`   ${stat.type}: ${stat.count}`);
     });
 
     console.log('\n🎉 انتهى الملء بنجاح!');

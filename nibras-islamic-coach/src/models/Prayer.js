@@ -214,6 +214,23 @@ class Prayer {
 
     return result.count;
   }
+
+  /**
+   * البحث عن صلوات المستخدم الأخيرة
+   */
+  static findRecent(userId, limit = 50) {
+    const database = db.getDB();
+
+    const stmt = database.prepare(`
+      SELECT * FROM prayers
+      WHERE user_id = ?
+      ORDER BY date DESC
+      LIMIT ?
+    `);
+
+    const rows = stmt.all(userId, limit);
+    return rows.map(row => this._formatPrayer(row));
+  }
 }
 
 module.exports = Prayer;

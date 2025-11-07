@@ -100,7 +100,7 @@ class WhatsAppBot {
       const phone = msg.from.replace('@c.us', '');
 
       // البحث عن المستخدم
-      const user = await User.findOne({ phone: { $regex: phone } });
+      const user = User.findByPhone(phone);
 
       if (!user) {
         // مستخدم غير مسجل
@@ -218,32 +218,33 @@ class WhatsAppBot {
       }
 
       // تسجيل الصلاة
-      const prayer = new Prayer({
-        userId: user._id,
+      const prayer = Prayer.create({
+        userId: user.id,
         prayer: currentPrayer.name,
         date: new Date(),
         status,
         hijriDate: times.hijriDate
       });
 
-      await prayer.save();
+      // تحديث نقاط المستخدم والشريط
+      User.addPoints(user.id, prayer.points);
+      User.updateStreak(user.id, new Date());
 
-      // تحديث نقاط المستخدم
-      await user.addPoints(prayer.points);
-      await user.updateStreak(new Date());
+      // إعادة جلب المستخدم للحصول على البيانات المحدثة
+      const updatedUser = User.findById(user.id);
 
       // رسالة الرد
       message += `\n📊 النقاط: +${prayer.points}\n`;
-      message += `💎 المجموع: ${user.stats.totalPoints}\n`;
-      message += `🔥 الشريط: ${user.stats.currentStreak} يوم`;
+      message += `💎 المجموع: ${updatedUser.stats.totalPoints}\n`;
+      message += `🔥 الشريط: ${updatedUser.stats.currentStreak} يوم`;
 
       // رسالة تحفيزية إن وجدت
-      if (user.stats.currentStreak % 7 === 0 && user.stats.currentStreak > 0) {
-        message += `\n\n🎉 ما شاء الله! ${user.stats.currentStreak} يوم متتالية!`;
+      if (updatedUser.stats.currentStreak % 7 === 0 && updatedUser.stats.currentStreak > 0) {
+        message += `\n\n🎉 ما شاء الله! ${updatedUser.stats.currentStreak} يوم متتالية!`;
 
         // رسالة تحفيزية من Claude
-        const motivation = await claudeAI.generateMotivationalMessage(user, {
-          streak: user.stats.currentStreak
+        const motivation = await claudeAI.generateMotivationalMessage(updatedUser, {
+          streak: updatedUser.stats.currentStreak
         });
         message += `\n\n${motivation}`;
       }
@@ -264,8 +265,8 @@ class WhatsAppBot {
       const startOfWeek = moment().startOf('week').toDate();
       const endOfWeek = moment().endOf('week').toDate();
 
-      const weeklyPrayers = await Prayer.getUserStats(user._id, startOfWeek, endOfWeek);
-      const weeklyQuran = await Quran.getUserQuranStats(user._id, startOfWeek, endOfWeek);
+      const weeklyPrayers = Prayer.getUserStats(user.id, startOfWeek, endOfWeek);
+      const weeklyQuran = Quran.getUserQuranStats(user.id, startOfWeek, endOfWeek);
 
       let message = `📊 *إحصائياتك الأسبوعية* 📊\n`;
       message += `━━━━━━━━━━━━━━━━\n\n`;
@@ -523,13 +524,8 @@ class WhatsAppBot {
       await msg.reply('🤖 جاري تحليل سلوكك وعباداتك...');
 
       // جلب البيانات الأخيرة
-      const prayers = await Prayer.find({ userId: user._id })
-        .sort({ date: -1 })
-        .limit(50);
-
-      const quran = await Quran.find({ userId: user._id })
-        .sort({ date: -1 })
-        .limit(20);
+      const prayers = Prayer.findRecent(user.id, 50);
+      const quran = Quran.findRecent(user.id, 20);
 
       // التحليل بواسطة Claude
       const analysis = await claudeAI.analyzeUserBehavior(user, prayers, quran);
@@ -565,8 +561,8 @@ class WhatsAppBot {
     try {
       await msg.reply('💡 جاري إعداد نصائح مخصصة لك...');
 
-      const prayers = await Prayer.find({ userId: user._id }).sort({ date: -1 }).limit(50);
-      const quran = await Quran.find({ userId: user._id }).sort({ date: -1 }).limit(20);
+      const prayers = Prayer.findRecent(user.id, 50);
+      const quran = Quran.findRecent(user.id, 20);
 
       const analysis = await claudeAI.analyzeUserBehavior(user, prayers, quran);
       const advice = await claudeAI.generatePersonalizedAdvice(user, analysis);
@@ -691,7 +687,7 @@ class WhatsAppBot {
    */
   async _checkPrayerTimes() {
     try {
-      const users = await User.find({ status: 'active' });
+      const users = User.findAll({ status: 'active' });
 
       for (let user of users) {
         const times = await prayerTimesService.getToday(user.location);
@@ -752,12 +748,12 @@ class WhatsAppBot {
    */
   async _sendMorningMessages() {
     try {
-      const users = await User.find({
-        status: 'active',
-        'settings.dailyContent': true
-      });
+      const users = User.findAll({ status: 'active' });
 
-      for (let user of users) {
+      // تصفية المستخدمين حسب إعداداتهم
+      const filteredUsers = users.filter(u => u.settings?.dailyContent === true);
+
+      for (let user of filteredUsers) {
         const occasions = prayerTimesService.getIslamicOccasion();
         const dayName = prayerTimesService.getArabicDayName();
 
@@ -792,12 +788,12 @@ class WhatsAppBot {
    */
   async _sendEveningMessages() {
     try {
-      const users = await User.find({
-        status: 'active',
-        'settings.dailyContent': true
-      });
+      const users = User.findAll({ status: 'active' });
 
-      for (let user of users) {
+      // تصفية المستخدمين حسب إعداداتهم
+      const filteredUsers = users.filter(u => u.settings?.dailyContent === true);
+
+      for (let user of filteredUsers) {
         const hadith = await chatGPT.generateDailyContent('حديث', {
           level: user.profile.level
         });
@@ -823,17 +819,17 @@ class WhatsAppBot {
    */
   async _sendWeeklyReports() {
     try {
-      const users = await User.find({
-        status: 'active',
-        'settings.weeklyReport': true
-      });
+      const users = User.findAll({ status: 'active' });
 
-      for (let user of users) {
+      // تصفية المستخدمين حسب إعداداتهم
+      const filteredUsers = users.filter(u => u.settings?.weeklyReport === true);
+
+      for (let user of filteredUsers) {
         const startOfWeek = moment().startOf('week').toDate();
         const endOfWeek = moment().endOf('week').toDate();
 
-        const weeklyPrayers = await Prayer.getUserStats(user._id, startOfWeek, endOfWeek);
-        const weeklyQuran = await Quran.getUserQuranStats(user._id, startOfWeek, endOfWeek);
+        const weeklyPrayers = Prayer.getUserStats(user.id, startOfWeek, endOfWeek);
+        const weeklyQuran = Quran.getUserQuranStats(user.id, startOfWeek, endOfWeek);
 
         const weekStats = {
           prayers: weeklyPrayers,
