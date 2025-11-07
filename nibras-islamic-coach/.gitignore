@@ -30,6 +30,11 @@ Thumbs.db
 dist/
 build/
 
-# Database
+# Database (SQLite)
+data/
 *.db
-*.sqlite
+*.db-shm
+*.db-wal
+
+# Backups
+backups/
