@@ -1,191 +1,219 @@
-const mongoose = require('mongoose');
+const db = require('../config/database');
+const moment = require('moment');
 
-const PrayerSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true
-  },
+/**
+ * نموذج الصلاة - SQLite
+ */
+class Prayer {
+  /**
+   * إنشاء سجل صلاة جديد
+   */
+  static create(data) {
+    const database = db.getDB();
 
-  // نوع الصلاة
-  prayer: {
-    type: String,
-    enum: ['فجر', 'ظهر', 'عصر', 'مغرب', 'عشاء'],
-    required: true
-  },
+    // حساب النقاط قبل الحفظ
+    const points = this._calculatePoints(data);
 
-  // التاريخ والوقت
-  date: {
-    type: Date,
-    required: true,
-    index: true
-  },
-  hijriDate: {
-    day: Number,
-    month: String,
-    year: Number
-  },
+    const stmt = database.prepare(`
+      INSERT INTO prayers (
+        user_id, prayer, date, hijri_date, status,
+        in_masjid, with_jamaa,
+        sunnah_before, sunnah_after,
+        nafl_duha, nafl_witr, nafl_tahajjud, nafl_qiyam,
+        points, notes
+      ) VALUES (
+        @user_id, @prayer, @date, @hijri_date, @status,
+        @in_masjid, @with_jamaa,
+        @sunnah_before, @sunnah_after,
+        @nafl_duha, @nafl_witr, @nafl_tahajjud, @nafl_qiyam,
+        @points, @notes
+      )
+    `);
 
-  // حالة الصلاة
-  status: {
-    type: String,
-    enum: ['في الوقت', 'متأخر', 'قضاء', 'فائت'],
-    required: true
-  },
+    const params = {
+      user_id: data.userId,
+      prayer: data.prayer,
+      date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
+      hijri_date: data.hijriDate ? JSON.stringify(data.hijriDate) : null,
+      status: data.status,
 
-  // مكان الصلاة
-  inMasjid: {
-    type: Boolean,
-    default: false
-  },
-  withJamaa: {
-    type: Boolean,
-    default: false
-  },
+      in_masjid: data.inMasjid ? 1 : 0,
+      with_jamaa: data.withJamaa ? 1 : 0,
 
-  // السنن الراتبة
-  sunnah: {
-    before: {
-      type: Boolean,
-      default: false
-    },
-    after: {
-      type: Boolean,
-      default: false
-    }
-  },
+      sunnah_before: data.sunnah?.before ? 1 : 0,
+      sunnah_after: data.sunnah?.after ? 1 : 0,
 
-  // النوافل
-  nafl: {
-    duha: Boolean,        // الضحى
-    witr: Boolean,        // الوتر
-    tahajjud: Boolean,    // التهجد
-    qiyam: Boolean        // قيام الليل
-  },
+      nafl_duha: data.nafl?.duha ? 1 : 0,
+      nafl_witr: data.nafl?.witr ? 1 : 0,
+      nafl_tahajjud: data.nafl?.tahajjud ? 1 : 0,
+      nafl_qiyam: data.nafl?.qiyam ? 1 : 0,
 
-  // النقاط المكتسبة
-  points: {
-    type: Number,
-    default: 0
-  },
+      points: points,
+      notes: data.notes || null
+    };
 
-  // وقت التسجيل
-  recordedAt: {
-    type: Date,
-    default: Date.now
-  },
-
-  // ملاحظات
-  notes: String
-});
-
-// Index مركب للبحث السريع
-PrayerSchema.index({ userId: 1, date: -1 });
-PrayerSchema.index({ userId: 1, prayer: 1, date: -1 });
-
-// حساب النقاط قبل الحفظ
-PrayerSchema.pre('save', function(next) {
-  let points = 0;
-
-  // النقاط الأساسية
-  switch(this.status) {
-    case 'في الوقت':
-      points = 10;
-      break;
-    case 'متأخر':
-      points = 7;
-      break;
-    case 'قضاء':
-      points = 5;
-      break;
-    case 'فائت':
-      points = -15;
-      break;
+    const result = stmt.run(params);
+    return this.findById(result.lastInsertRowid);
   }
 
-  // نقاط إضافية
-  if (this.inMasjid) points += 10;
-  if (this.withJamaa) points += 5;
-  if (this.sunnah.before) points += 3;
-  if (this.sunnah.after) points += 3;
+  /**
+   * البحث بالـ ID
+   */
+  static findById(id) {
+    const database = db.getDB();
+    const stmt = database.prepare('SELECT * FROM prayers WHERE id = ?');
+    const row = stmt.get(id);
 
-  // نقاط النوافل
-  if (this.nafl.duha) points += 8;
-  if (this.nafl.witr) points += 10;
-  if (this.nafl.tahajjud) points += 50;
-  if (this.nafl.qiyam) points += 25;
+    return row ? this._formatPrayer(row) : null;
+  }
 
-  this.points = points;
-  next();
-});
+  /**
+   * إحصائيات المستخدم لفترة معينة
+   */
+  static getUserStats(userId, startDate, endDate) {
+    const database = db.getDB();
 
-// Static Methods
-PrayerSchema.statics = {
-  // إحصائيات المستخدم لفترة معينة
-  getUserStats: async function(userId, startDate, endDate) {
-    return this.aggregate([
-      {
-        $match: {
-          userId: mongoose.Types.ObjectId(userId),
-          date: {
-            $gte: new Date(startDate),
-            $lte: new Date(endDate)
-          }
-        }
-      },
-      {
-        $group: {
-          _id: '$prayer',
-          total: { $sum: 1 },
-          onTime: {
-            $sum: { $cond: [{ $eq: ['$status', 'في الوقت'] }, 1, 0] }
-          },
-          missed: {
-            $sum: { $cond: [{ $eq: ['$status', 'فائت'] }, 1, 0] }
-          },
-          totalPoints: { $sum: '$points' }
-        }
-      }
-    ]);
-  },
+    const stmt = database.prepare(`
+      SELECT
+        prayer,
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'في الوقت' THEN 1 ELSE 0 END) as onTime,
+        SUM(CASE WHEN status = 'فائت' THEN 1 ELSE 0 END) as missed,
+        SUM(points) as totalPoints
+      FROM prayers
+      WHERE user_id = ? AND date BETWEEN ? AND ?
+      GROUP BY prayer
+    `);
 
-  // الصلوات اليوم
-  getTodayPrayers: async function(userId) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    return this.find({
+    const rows = stmt.all(
       userId,
-      date: {
-        $gte: today,
-        $lt: tomorrow
-      }
-    }).sort({ date: 1 });
-  },
+      new Date(startDate).toISOString(),
+      new Date(endDate).toISOString()
+    );
 
-  // أفضل أسبوع
-  getBestWeek: async function(userId) {
-    const prayers = await this.find({ userId })
-      .sort({ date: -1 })
-      .limit(35); // 7 أيام × 5 صلوات
-
-    let bestWeek = 0;
-    let currentWeek = 0;
-
-    prayers.forEach(prayer => {
-      if (prayer.status !== 'فائت') {
-        currentWeek++;
-      } else {
-        if (currentWeek > bestWeek) bestWeek = currentWeek;
-        currentWeek = 0;
-      }
-    });
-
-    return Math.max(bestWeek, currentWeek);
+    return rows.map(row => ({
+      _id: row.prayer,
+      total: row.total,
+      onTime: row.onTime,
+      missed: row.missed,
+      totalPoints: row.totalPoints
+    }));
   }
-};
 
-module.exports = mongoose.model('Prayer', PrayerSchema);
+  /**
+   * الصلوات اليوم
+   */
+  static getTodayPrayers(userId) {
+    const database = db.getDB();
+
+    const today = moment().startOf('day').toISOString();
+    const tomorrow = moment().add(1, 'day').startOf('day').toISOString();
+
+    const stmt = database.prepare(`
+      SELECT * FROM prayers
+      WHERE user_id = ? AND date >= ? AND date < ?
+      ORDER BY date ASC
+    `);
+
+    const rows = stmt.all(userId, today, tomorrow);
+    return rows.map(row => this._formatPrayer(row));
+  }
+
+  /**
+   * حساب النقاط
+   */
+  static _calculatePoints(data) {
+    let points = 0;
+
+    // النقاط الأساسية
+    switch(data.status) {
+      case 'في الوقت':
+        points = 10;
+        break;
+      case 'متأخر':
+        points = 7;
+        break;
+      case 'قضاء':
+        points = 5;
+        break;
+      case 'فائت':
+        points = -15;
+        break;
+    }
+
+    // نقاط إضافية
+    if (data.inMasjid) points += 10;
+    if (data.withJamaa) points += 5;
+    if (data.sunnah?.before) points += 3;
+    if (data.sunnah?.after) points += 3;
+
+    // نقاط النوافل
+    if (data.nafl?.duha) points += 8;
+    if (data.nafl?.witr) points += 10;
+    if (data.nafl?.tahajjud) points += 50;
+    if (data.nafl?.qiyam) points += 25;
+
+    return points;
+  }
+
+  /**
+   * تنسيق الصلاة من الصف
+   */
+  static _formatPrayer(row) {
+    return {
+      _id: row.id,
+      id: row.id,
+      userId: row.user_id,
+      prayer: row.prayer,
+      date: row.date,
+      hijriDate: row.hijri_date ? JSON.parse(row.hijri_date) : null,
+      status: row.status,
+
+      inMasjid: row.in_masjid === 1,
+      withJamaa: row.with_jamaa === 1,
+
+      sunnah: {
+        before: row.sunnah_before === 1,
+        after: row.sunnah_after === 1,
+      },
+
+      nafl: {
+        duha: row.nafl_duha === 1,
+        witr: row.nafl_witr === 1,
+        tahajjud: row.nafl_tahajjud === 1,
+        qiyam: row.nafl_qiyam === 1,
+      },
+
+      points: row.points,
+      notes: row.notes,
+      recordedAt: row.recorded_at,
+    };
+  }
+
+  /**
+   * عد الصلوات
+   */
+  static count(filter = {}) {
+    const database = db.getDB();
+
+    let query = 'SELECT COUNT(*) as count FROM prayers WHERE 1=1';
+    const params = [];
+
+    if (filter.userId) {
+      query += ' AND user_id = ?';
+      params.push(filter.userId);
+    }
+
+    if (filter.date) {
+      query += ' AND date = ?';
+      params.push(filter.date);
+    }
+
+    const stmt = database.prepare(query);
+    const result = params.length > 0 ? stmt.get(...params) : stmt.get();
+
+    return result.count;
+  }
+}
+
+module.exports = Prayer;

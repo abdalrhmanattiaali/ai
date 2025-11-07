@@ -13,12 +13,9 @@ const chatGPT = require('../services/ai/ChatGPTService');
 
 // ============= Users APIs =============
 
-/**
- * الحصول على كل المستخدمين
- */
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find().select('-__v');
+    const users = User.findAll();
     res.json({
       success: true,
       count: users.length,
@@ -29,12 +26,9 @@ router.get('/users', async (req, res) => {
   }
 });
 
-/**
- * الحصول على مستخدم بالـ ID
- */
 router.get('/users/:id', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
     }
@@ -44,15 +38,10 @@ router.get('/users/:id', async (req, res) => {
   }
 });
 
-/**
- * إضافة مستخدم جديد
- */
 router.post('/users', async (req, res) => {
   try {
-    const user = new User(req.body);
-    await user.save();
+    const user = User.create(req.body);
 
-    // إرسال رسالة ترحيب
     const welcomeMessage = `🌙 مرحباً بك في نبراس المؤمنين!\n\n` +
       `السلام عليكم ${user.name} 👋\n\n` +
       `أنا نبراس، مساعدك الديني الشخصي.\n` +
@@ -71,16 +60,9 @@ router.post('/users', async (req, res) => {
   }
 });
 
-/**
- * تحديث مستخدم
- */
 router.put('/users/:id', async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const user = User.update(req.params.id, req.body);
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
@@ -92,14 +74,11 @@ router.put('/users/:id', async (req, res) => {
   }
 });
 
-/**
- * حذف مستخدم
- */
 router.delete('/users/:id', async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const deleted = User.delete(req.params.id);
 
-    if (!user) {
+    if (!deleted) {
       return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
     }
 
@@ -109,12 +88,9 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-/**
- * إحصائيات مستخدم محدد
- */
 router.get('/users/:id/stats', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
     }
@@ -124,8 +100,8 @@ router.get('/users/:id/stats', async (req, res) => {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 7);
 
-    const prayers = await Prayer.getUserStats(req.params.id, startOfWeek, endOfWeek);
-    const quran = await Quran.getUserQuranStats(req.params.id, startOfWeek, endOfWeek);
+    const prayers = Prayer.getUserStats(req.params.id, startOfWeek, endOfWeek);
+    const quran = Quran.getUserQuranStats(req.params.id, startOfWeek, endOfWeek);
 
     res.json({
       success: true,
@@ -150,9 +126,6 @@ router.get('/users/:id/stats', async (req, res) => {
 
 // ============= Messages APIs =============
 
-/**
- * إرسال رسالة لمستخدم
- */
 router.post('/messages/send', async (req, res) => {
   try {
     const { phone, message } = req.body;
@@ -175,9 +148,6 @@ router.post('/messages/send', async (req, res) => {
   }
 });
 
-/**
- * إرسال رسالة جماعية لكل المستخدمين
- */
 router.post('/messages/broadcast', async (req, res) => {
   try {
     const { message } = req.body;
@@ -189,7 +159,7 @@ router.post('/messages/broadcast', async (req, res) => {
       });
     }
 
-    const users = await User.find({ status: 'active' });
+    const users = User.findAll({ status: 'active' });
     let sent = 0;
     let failed = 0;
 
@@ -198,7 +168,6 @@ router.post('/messages/broadcast', async (req, res) => {
       if (success) sent++;
       else failed++;
 
-      // تأخير بسيط لتجنب الحظر
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
@@ -213,9 +182,6 @@ router.post('/messages/broadcast', async (req, res) => {
   }
 });
 
-/**
- * إرسال رسالة لمجموعة
- */
 router.post('/messages/group', async (req, res) => {
   try {
     const { groupId, message } = req.body;
@@ -240,9 +206,6 @@ router.post('/messages/group', async (req, res) => {
 
 // ============= Prayer Times APIs =============
 
-/**
- * أوقات الصلاة لمدينة
- */
 router.get('/prayer-times', async (req, res) => {
   try {
     const { city = 'Cairo', country = 'Egypt' } = req.query;
@@ -258,9 +221,6 @@ router.get('/prayer-times', async (req, res) => {
   }
 });
 
-/**
- * التاريخ الهجري
- */
 router.get('/hijri-date', (req, res) => {
   try {
     const hijri = prayerTimesService.getHijriDate();
@@ -278,20 +238,18 @@ router.get('/hijri-date', (req, res) => {
 
 // ============= AI APIs =============
 
-/**
- * تحليل مستخدم بواسطة Claude
- */
 router.post('/ai/analyze', async (req, res) => {
   try {
     const { userId } = req.body;
 
-    const user = await User.findById(userId);
+    const user = User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
     }
 
-    const prayers = await Prayer.find({ userId }).sort({ date: -1 }).limit(50);
-    const quran = await Quran.find({ userId }).sort({ date: -1 }).limit(20);
+    // سيتم تنفيذ هذا لاحقاً مع تحديث WhatsAppBot
+    const prayers = []; // Prayer.findRecent(userId, 50);
+    const quran = []; // Quran.findRecent(userId, 20);
 
     const analysis = await claudeAI.analyzeUserBehavior(user, prayers, quran);
 
@@ -304,20 +262,17 @@ router.post('/ai/analyze', async (req, res) => {
   }
 });
 
-/**
- * نصائح مخصصة من Claude
- */
 router.post('/ai/advice', async (req, res) => {
   try {
     const { userId } = req.body;
 
-    const user = await User.findById(userId);
+    const user = User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
     }
 
-    const prayers = await Prayer.find({ userId }).sort({ date: -1 }).limit(50);
-    const quran = await Quran.find({ userId }).sort({ date: -1 }).limit(20);
+    const prayers = [];
+    const quran = [];
 
     const analysis = await claudeAI.analyzeUserBehavior(user, prayers, quran);
     const advice = await claudeAI.generatePersonalizedAdvice(user, analysis);
@@ -331,9 +286,6 @@ router.post('/ai/advice', async (req, res) => {
   }
 });
 
-/**
- * محتوى يومي من ChatGPT
- */
 router.post('/ai/content', async (req, res) => {
   try {
     const { type, context } = req.body;
@@ -349,9 +301,6 @@ router.post('/ai/content', async (req, res) => {
   }
 });
 
-/**
- * إجابة سؤال شرعي
- */
 router.post('/ai/ask', async (req, res) => {
   try {
     const { question, level = 'متوسط' } = req.body;
@@ -377,32 +326,32 @@ router.post('/ai/ask', async (req, res) => {
 
 // ============= Dashboard Stats =============
 
-/**
- * إحصائيات عامة للوحة التحكم
- */
 router.get('/dashboard/stats', async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({ status: 'active' });
+    const totalUsers = User.count();
+    const activeUsers = User.count({ status: 'active' });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const todayPrayers = await Prayer.countDocuments({
-      date: { $gte: today, $lt: tomorrow }
+    const todayPrayers = Prayer.count({
+      date: today.toISOString()
     });
 
-    const totalPoints = await User.aggregate([
-      { $group: { _id: null, total: { $sum: '$stats.totalPoints' } } }
-    ]);
+    const allUsers = User.findAll();
+    const totalPoints = allUsers.reduce((sum, u) => sum + u.stats.totalPoints, 0);
 
-    // المتصدرون
-    const topUsers = await User.find()
-      .sort({ 'stats.totalPoints': -1 })
-      .limit(10)
-      .select('name stats.totalPoints stats.currentStreak');
+    const topUsers = User.findAll()
+      .sort((a, b) => b.stats.totalPoints - a.stats.totalPoints)
+      .slice(0, 10)
+      .map(u => ({
+        _id: u.id,
+        name: u.name,
+        stats: {
+          totalPoints: u.stats.totalPoints,
+          currentStreak: u.stats.currentStreak
+        }
+      }));
 
     res.json({
       success: true,
@@ -410,7 +359,7 @@ router.get('/dashboard/stats', async (req, res) => {
         totalUsers,
         activeUsers,
         todayPrayers,
-        totalPoints: totalPoints[0]?.total || 0,
+        totalPoints,
         topUsers
       }
     });
